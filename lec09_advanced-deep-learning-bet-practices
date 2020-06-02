@@ -1,0 +1,71 @@
+7.1
+
+* Figure 7.1 : 우리는 입력을 받아서, layer을 순차적으로 거친 후 output 을 출력하는 모델을 배웠다.
+
+*모델링을 할 때 발생할 수 있는 문제
+1)"Multimodal inputs" 입력 데이터가 완전히 다른 source로 부터 들어옴  
+	- Ex)vector, text, image 데이터가 입력으로 들어옴)
+	   Metadata : vector로 표현할 수 있으므로 dense module 사용
+	  Text description : RNN module 사용
+	   Picture : CNN moudule 사용
+
+2) "Multiple targets" 하나의 input(동일한 source)이 여러개의 output(서로 다른 prediction) 을 내야하는 경우
+	- Ex) 소설의 text를 입력 받아서, 장르와 연도를 예측하는 모델
+
+3) 특정 layer의 output이 다른 layer의 input으로 바로 들어가지 않는 경우(internal branching)
+	- Ex)(*Figure 7.4)inception module: 각 path에서 3D tensor feature map 이 나오고, 이들을 채널 축으로 연결하는 것이 concatenate
+	- Ex)(*Figure 7.5 그림 설명)
+	          제일 아래쪽에 있는 layer에서 x가 출력되었을 때, 두 개의 layer 거친 뒤 만나는 '+'에서 x 값이 더해진다. 
+	          '+' 이전의 두개의 layer는 모델이 수행하는데에 나머지(residual) 정보 만 학습하면 되기에, 우리는 'Residual connection'이라 부른다.
+
+이번 코드에서는 sequentail 하지 않은 모델에 대해서 어떻게 학습할 지를 배운다.
+
+----------------------------------------- code -----------------------------------------
+*Functional API
+- 각 layer를 일종의 함수(input을 받으면 바로 output출력)처럼 이용한다.
+- 쉽게 말해서 keras에서 선언된 layer을 함수처럼 사용하는 것이다.
+	from tensorflow.keras import Input, layers
+
+	input_tesnsor=Input(shape=(32,))
+	dense=layers.Dense(32, activation='relu')
+	output_tensor=dense(input_tensor)
+
+*Multi-input model with Functional API
+- 가장 대표적인 모델: question-answering model(지문에서 질문에 대한 답을 출력해줌)
+- 지문과 질문에 대한 input으로 하나의 output출력
+
+*Multi-output model with Functional API
+- 3개의 output tensor에 대해서 서로 다른 loss function을 정의할 경우
+
+   age_prediction : 실수를 예측하는 것이므로 loss function "mse(mean squared error)" 사용
+   income_prediction : 클래스에 속하는 것을 예측하므로 loss function "categorical_crossentropy" 사용
+   gender_prediction : bianry classification 예측 문제이므로 loss function "binary_crossentropy" 사용
+
+	age_prediction=layers.Dense(1, name='age')(x)
+	income_prediction=layers.Dense(num_income_groups, activation='softmax', name='income')(x)
+	gender_prediction=layers.Dense(1, activation='sigmoid', name='gender')(x)
+
+	model=Model(posts_input, [age_prediction, income_prediction, gender_prediction])
+
+	model.compile(optimizer='rmsprop',
+		           loss={'age' : 'mse',
+		                      'income' :  'categorical_crossentropy',
+		                       'gender' : 'binary_corssentropy'})
+
+	→ age/income/gender_prediction 을 정의할 때 각각 name을 지정했으므로 dictionary 형태로 loss fuction 부여한다.
+
+
+- loss 값을 출력해보면, 크기의 차이가 발생할 수 있는데, 이럴 경우 각 loss 에 대해 상대적인 중요도를 정하기 위해 loss_weight 정의한다.
+   (loss 값을 출력해봐야, 이런 문제를 알아낼 수 있음)
+	
+		model.compile(optimizer='rmsprop',
+		       	           loss={'age' : 'mse',
+				  'income' :  'categorical_crossentropy',
+				   'gender' : 'binary_corssentropy'}),
+		      	           loss_weights={'age': 0.25, 
+               	                                     	    		'income': 1., 
+                           	                  	   		'gender': 10.})
+
+*Directed acyyclic graphs of layers
+
+*Residual connections(엄청 많은 수의 layer가 있어도 성공적으로 학습할 수 있음)
